@@ -57,7 +57,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
         
         // 使用后置摄像头
         guard let backCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            print("无法获取后置摄像头")
             return
         }
         
@@ -89,7 +88,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
                 captureSession.addInput(videoInput)
             }
         } catch {
-            print("设置视频输入时出错: \(error)")
         }
     }
     
@@ -97,7 +95,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
         guard let captureSession = captureSession else { return }
         
         guard let audioDevice = AVCaptureDevice.default(for: .audio) else {
-            print("无法获取音频设备")
             return
         }
         
@@ -107,7 +104,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
                 captureSession.addInput(audioInput)
             }
         } catch {
-            print("设置音频输入时出错: \(error)")
         }
     }
     
@@ -189,7 +185,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
         // 检查权限
         checkPermissions { [weak self] granted in
             guard granted else {
-                print("权限不足，无法开始录制")
                 return
             }
             
@@ -277,7 +272,6 @@ class VideoRecordingManager: NSObject, ObservableObject {
     private func saveVideoToPhotoLibrary(url: URL) {
         PHPhotoLibrary.requestAuthorization { status in
             guard status == .authorized else {
-                print("没有相册访问权限")
                 return
             }
             
@@ -286,11 +280,9 @@ class VideoRecordingManager: NSObject, ObservableObject {
             }) { success, error in
                 DispatchQueue.main.async {
                     if success {
-                        print("视频已保存到相册")
                         // 删除临时文件
                         try? FileManager.default.removeItem(at: url)
                     } else {
-                        print("保存视频到相册失败: \(error?.localizedDescription ?? "未知错误")")
                     }
                 }
             }
@@ -306,9 +298,7 @@ class VideoRecordingManager: NSObject, ObservableObject {
 extension VideoRecordingManager: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         if let error = error {
-            print("录制完成时出错: \(error)")
         } else {
-            print("录制完成，正在保存到相册...")
             saveVideoToPhotoLibrary(url: outputFileURL)
         }
     }

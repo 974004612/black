@@ -75,10 +75,13 @@ class VideoRecordingManager: NSObject, ObservableObject {
             }
             
             // 启用杜比视界支持（如果可用）
-            if backCamera.activeFormat.supportedColorSpaces.contains(.hlg_BT2020) {
-                backCamera.activeColorSpace = .hlg_BT2020
-            } else if backCamera.activeFormat.supportedColorSpaces.contains(.P3_D65) {
-                backCamera.activeColorSpace = .P3_D65
+            if #available(iOS 14.0, *) {
+                let supportedColorSpaces = backCamera.activeFormat.supportedColorSpaces
+                if supportedColorSpaces.contains(AVCaptureColorSpace.HLG_BT2020) {
+                    backCamera.activeColorSpace = AVCaptureColorSpace.HLG_BT2020
+                } else if supportedColorSpaces.contains(AVCaptureColorSpace.P3_D65) {
+                    backCamera.activeColorSpace = AVCaptureColorSpace.P3_D65
+                }
             }
             
             backCamera.unlockForConfiguration()
@@ -124,8 +127,14 @@ class VideoRecordingManager: NSObject, ObservableObject {
                 }
                 
                 // 设置视频方向
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = .portrait
+                if #available(iOS 17.0, *) {
+                    if connection.isVideoRotationAngleSupported(0) {
+                        connection.videoRotationAngle = 0
+                    }
+                } else {
+                    if connection.isVideoOrientationSupported {
+                        connection.videoOrientation = .portrait
+                    }
                 }
             }
             

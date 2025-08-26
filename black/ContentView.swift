@@ -18,24 +18,6 @@ struct ContentView: View {
             Color.black
                 .ignoresSafeArea(.all)
             
-            // 录制状态指示器（可选，用于调试）
-            if recordingManager.isRecording {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
-                            .opacity(0.8)
-                        Text(formatDuration(recordingManager.recordingDuration))
-                            .foregroundColor(.white)
-                            .font(.system(size: 12, family: .monospaced))
-                            .opacity(0.7)
-                        Spacer()
-                    }
-                    .padding(.bottom, 50)
-                }
-            }
         }
         .preferredColorScheme(.dark) // 强制深色模式
         .onAppear {
@@ -82,9 +64,8 @@ struct ContentView: View {
     }
     
     private func hideStatusBar() {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            windowScene.statusBarManager?.statusBarHidden = true
-        }
+        // 在iOS中，状态栏的隐藏应该通过视图修饰符来控制
+        // 这个函数保留但不执行任何操作，因为我们已经在视图上使用了.statusBarHidden(true)
     }
 }
 

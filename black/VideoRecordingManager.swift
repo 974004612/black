@@ -306,7 +306,7 @@ class VideoRecordingManager: NSObject, ObservableObject {
 // MARK: - AVCaptureFileOutputRecordingDelegate
 extension VideoRecordingManager: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if let error = error {
+        if error != nil {
         } else {
             saveVideoToPhotoLibrary(url: outputFileURL)
         }

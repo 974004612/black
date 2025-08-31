@@ -12,33 +12,11 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
-    @State private var isRecording = false
     
     var body: some View {
-        ZStack {
-            // 纯黑色背景
-            Color.black
-                .ignoresSafeArea()
-            
-            // 录制状态指示器
-            VStack {
-                Spacer()
-                
-                HStack {
-                    // 录制状态圆点
-                    Circle()
-                        .fill(isRecording ? Color.red : Color.gray)
-                        .frame(width: 20, height: 20)
-                        .scaleEffect(isRecording ? 1.2 : 1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isRecording)
-                    
-                    Text(isRecording ? "录制中..." : "准备录制")
-                        .foregroundColor(.white)
-                        .font(.headline)
-                }
-                .padding(.bottom, 50)
-            }
-        }
+        // 纯黑色背景，不显示任何其他元素
+        Color.black
+            .ignoresSafeArea()
         .onAppear {
             setupCamera()
             preventScreenLock()
@@ -59,7 +37,6 @@ struct ContentView: View {
             if granted {
                 DispatchQueue.main.async {
                     cameraManager.startRecording()
-                    isRecording = true
                 }
             }
         }
@@ -70,10 +47,7 @@ struct ContentView: View {
     }
     
     private func stopRecordingAndSave() {
-        if isRecording {
-            cameraManager.stopRecording()
-            isRecording = false
-        }
+        cameraManager.stopRecording()
         UIApplication.shared.isIdleTimerDisabled = false
     }
 }

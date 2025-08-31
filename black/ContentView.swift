@@ -95,12 +95,20 @@ class CameraManager: NSObject, ObservableObject {
             
             // 配置120帧率
             try videoDevice.lockForConfiguration()
-            if videoDevice.isFrameRateSupported(120) {
-                videoDevice.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 120)
-                videoDevice.activeInput = videoInput
-                videoDevice.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 120)
-                videoDevice.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 120)
+            
+            // 查找支持120帧率的格式
+            let formats = videoDevice.formats
+            if let highFrameRateFormat = formats.first(where: { format in
+                format.videoSupportedFrameRateRanges.contains { range in
+                    range.maxFrameRate >= 120
+                }
+            }) {
+                videoDevice.activeFormat = highFrameRateFormat
+                let frameDuration = CMTime(value: 1, timescale: 120)
+                videoDevice.activeVideoMinFrameDuration = frameDuration
+                videoDevice.activeVideoMaxFrameDuration = frameDuration
             }
+            
             videoDevice.unlockForConfiguration()
             
         } catch {

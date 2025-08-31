@@ -405,6 +405,10 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_NSCameraUsageDescription = "此应用需要访问相机以进行视频录制";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "此应用需要访问麦克风以录制音频";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "此应用需要访问相册以保存录制的视频";
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -433,6 +437,10 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_NSCameraUsageDescription = "此应用需要访问相机以进行视频录制";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "此应用需要访问麦克风以录制音频";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "此应用需要访问相册以保存录制的视频";
+				INFOPLIST_KEY_UIStatusBarHidden = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

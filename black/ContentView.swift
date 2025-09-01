@@ -55,17 +55,12 @@ struct ContentView: View {
     }
     
     private func hideStatusBar() {
-        // 隐藏状态栏 - 使用多种方法确保隐藏
+        // 隐藏状态栏 - 使用正确的方法
         DispatchQueue.main.async {
-            // 方法1: 通过WindowScene
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                windowScene.statusBarManager?.isStatusBarHidden = true
-            }
-            
-            // 方法2: 通过UIApplication
+            // 使用UIApplication的方法隐藏状态栏
             UIApplication.shared.setStatusBarHidden(true, with: .none)
             
-            // 方法3: 强制更新状态栏
+            // 强制更新状态栏外观
             if let window = UIApplication.shared.windows.first {
                 window.setNeedsStatusBarAppearanceUpdate()
             }
@@ -75,9 +70,6 @@ struct ContentView: View {
     private func showStatusBar() {
         // 显示状态栏
         DispatchQueue.main.async {
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                windowScene.statusBarManager?.isStatusBarHidden = false
-            }
             UIApplication.shared.setStatusBarHidden(false, with: .none)
         }
     }

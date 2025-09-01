@@ -55,14 +55,11 @@ struct ContentView: View {
     }
     
     private func hideStatusBar() {
-        // 隐藏状态栏 - 使用正确的方法
+        // 隐藏状态栏 - 使用现代方法
         DispatchQueue.main.async {
-            // 使用UIApplication的方法隐藏状态栏
-            UIApplication.shared.setStatusBarHidden(true, with: .none)
-            
-            // 强制更新状态栏外观
-            if let window = UIApplication.shared.windows.first {
-                window.setNeedsStatusBarAppearanceUpdate()
+            // 使用现代的状态栏隐藏方法
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.statusBarManager?.isStatusBarHidden = true
             }
         }
     }
@@ -70,7 +67,9 @@ struct ContentView: View {
     private func showStatusBar() {
         // 显示状态栏
         DispatchQueue.main.async {
-            UIApplication.shared.setStatusBarHidden(false, with: .none)
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.statusBarManager?.isStatusBarHidden = false
+            }
         }
     }
 }
@@ -219,8 +218,12 @@ class CameraManager: NSObject, ObservableObject {
                     connection.preferredVideoStabilizationMode = .auto
                 }
                 
-                // 设置视频方向
-                connection.videoOrientation = .portrait
+                // 设置视频方向 - 使用现代API
+                if #available(iOS 17.0, *) {
+                    connection.videoRotationAngle = 0 // 0度表示竖屏
+                } else {
+                    connection.videoOrientation = .portrait
+                }
             }
         }
     }

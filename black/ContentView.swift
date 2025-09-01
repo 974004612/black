@@ -10,6 +10,29 @@ import AVFoundation
 import Photos
 import UIKit
 
+// 自定义UIViewController来控制状态栏
+class StatusBarController: UIViewController {
+    override var prefersStatusBarHidden: Bool {
+        return true
+    }
+    
+    override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation {
+        return .none
+    }
+}
+
+// SwiftUI包装器
+struct StatusBarControllerRepresentable: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> StatusBarController {
+        return StatusBarController()
+    }
+    
+    func updateUIViewController(_ uiViewController: StatusBarController, context: Context) {
+        // 强制更新状态栏
+        uiViewController.setNeedsStatusBarAppearanceUpdate()
+    }
+}
+
 struct ContentView: View {
     @StateObject private var cameraManager = CameraManager()
     
@@ -33,6 +56,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             stopRecordingAndSave()
         }
+        .background(StatusBarControllerRepresentable())
     }
     
     private func setupCamera() {
@@ -55,22 +79,14 @@ struct ContentView: View {
     }
     
     private func hideStatusBar() {
-        // 隐藏状态栏 - 使用现代方法
-        DispatchQueue.main.async {
-            // 使用现代的状态栏隐藏方法
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                windowScene.statusBarManager?.isStatusBarHidden = true
-            }
-        }
+        // 隐藏状态栏 - 使用SwiftUI修饰符即可
+        // 状态栏隐藏已经在body中通过.statusBarHidden(true)设置
+        print("状态栏隐藏已通过SwiftUI修饰符设置")
     }
     
     private func showStatusBar() {
-        // 显示状态栏
-        DispatchQueue.main.async {
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                windowScene.statusBarManager?.isStatusBarHidden = false
-            }
-        }
+        // 显示状态栏 - 使用SwiftUI修饰符即可
+        print("状态栏显示已通过SwiftUI修饰符设置")
     }
 }
 

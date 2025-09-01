@@ -15,14 +15,5 @@ struct blackApp: App {
             ContentView()
                 .statusBarHidden(true) // 全局隐藏状态栏
         }
-        .windowStyle(HiddenTitleBarWindowStyle()) // 隐藏标题栏
-    }
-}
-
-// 隐藏标题栏的窗口样式
-struct HiddenTitleBarWindowStyle: WindowStyle {
-    func body(configuration: Configuration) -> some Scene {
-        configuration
-            .defaultSize(width: .infinity, height: .infinity)
     }
 }

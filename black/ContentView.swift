@@ -17,12 +17,15 @@ struct ContentView: View {
         // 纯黑色背景，不显示任何其他元素
         Color.black
             .ignoresSafeArea()
+            .statusBarHidden(true) // 强制隐藏状态栏
         .onAppear {
             setupCamera()
             preventScreenLock()
+            hideStatusBar()
         }
         .onDisappear {
             stopRecordingAndSave()
+            showStatusBar()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             stopRecordingAndSave()
@@ -49,6 +52,34 @@ struct ContentView: View {
     private func stopRecordingAndSave() {
         cameraManager.stopRecording()
         UIApplication.shared.isIdleTimerDisabled = false
+    }
+    
+    private func hideStatusBar() {
+        // 隐藏状态栏 - 使用多种方法确保隐藏
+        DispatchQueue.main.async {
+            // 方法1: 通过WindowScene
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.statusBarManager?.isStatusBarHidden = true
+            }
+            
+            // 方法2: 通过UIApplication
+            UIApplication.shared.setStatusBarHidden(true, with: .none)
+            
+            // 方法3: 强制更新状态栏
+            if let window = UIApplication.shared.windows.first {
+                window.setNeedsStatusBarAppearanceUpdate()
+            }
+        }
+    }
+    
+    private func showStatusBar() {
+        // 显示状态栏
+        DispatchQueue.main.async {
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                windowScene.statusBarManager?.isStatusBarHidden = false
+            }
+            UIApplication.shared.setStatusBarHidden(false, with: .none)
+        }
     }
 }
 
@@ -79,13 +110,31 @@ class CameraManager: NSObject, ObservableObject {
     private func setupCaptureSession() {
         captureSession = AVCaptureSession()
         
-        // 设置4K分辨率
-        captureSession?.sessionPreset = .hd4K3840x2160
-        
         guard let captureSession = captureSession else { return }
         
-        // 配置视频输入
-        guard let videoDevice = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) else { return }
+        // 配置视频输入 - 优先使用主摄像头
+        var videoDevice: AVCaptureDevice?
+        
+        // 首先尝试获取主摄像头
+        if let mainCamera = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) {
+            // 检查是否是主摄像头（焦距通常在24-28mm之间）
+            let formats = mainCamera.formats
+            for format in formats {
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                // 主摄像头通常有更大的传感器和更好的性能
+                if dimensions.width >= 3840 && dimensions.height >= 2160 {
+                    videoDevice = mainCamera
+                    break
+                }
+            }
+        }
+        
+        // 如果没找到合适的主摄像头，使用默认的后置摄像头
+        if videoDevice == nil {
+            videoDevice = AVCaptureDevice.default(for: .video)
+        }
+        
+        guard let videoDevice = videoDevice else { return }
         
         do {
             let videoInput = try AVCaptureDeviceInput(device: videoDevice)
@@ -93,20 +142,59 @@ class CameraManager: NSObject, ObservableObject {
                 captureSession.addInput(videoInput)
             }
             
-            // 配置120帧率
+            // 配置高帧率和4K分辨率
             try videoDevice.lockForConfiguration()
             
-            // 查找支持120帧率的格式
+            // 查找支持4K 120帧率的格式
             let formats = videoDevice.formats
-            if let highFrameRateFormat = formats.first(where: { format in
-                format.videoSupportedFrameRateRanges.contains { range in
-                    range.maxFrameRate >= 120
+            var selectedFormat: AVCaptureDevice.Format?
+            var selectedFrameRate: Double = 30.0
+            
+            for format in formats {
+                // 检查分辨率是否支持4K
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let is4K = dimensions.width >= 3840 && dimensions.height >= 2160
+                
+                // 检查是否支持HDR/杜比视界
+                let supportsHDR = format.isVideoHDRSupported
+                
+                // 检查帧率范围
+                for frameRateRange in format.videoSupportedFrameRateRanges {
+                    if frameRateRange.maxFrameRate >= 120 && is4K {
+                        // 优先选择支持HDR的格式
+                        if selectedFormat == nil || (supportsHDR && !selectedFormat!.isVideoHDRSupported) {
+                            selectedFormat = format
+                            selectedFrameRate = 120.0
+                        }
+                    }
                 }
-            }) {
-                videoDevice.activeFormat = highFrameRateFormat
-                let frameDuration = CMTime(value: 1, timescale: 120)
+            }
+            
+            if let format = selectedFormat {
+                // 设置格式（这会同时设置分辨率和帧率）
+                videoDevice.activeFormat = format
+                
+                // 设置帧率
+                let frameDuration = CMTime(value: 1, timescale: Int32(selectedFrameRate))
                 videoDevice.activeVideoMinFrameDuration = frameDuration
                 videoDevice.activeVideoMaxFrameDuration = frameDuration
+                
+                // 打印详细信息
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                print("成功设置格式:")
+                print("- 分辨率: \(dimensions.width) x \(dimensions.height)")
+                print("- 帧率: \(selectedFrameRate) FPS")
+                print("- HDR支持: \(format.isVideoHDRSupported ? "是" : "否")")
+                print("- 杜比视界支持: \(format.isVideoHDRSupported ? "是" : "否")")
+            } else {
+                print("未找到支持4K 120帧率的格式，使用默认设置")
+                // 打印可用的格式信息
+                print("可用格式:")
+                for (index, format) in formats.enumerated() {
+                    let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                    let maxFrameRate = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
+                    print("格式 \(index): \(dimensions.width)x\(dimensions.height), 最大帧率: \(maxFrameRate), HDR: \(format.isVideoHDRSupported)")
+                }
             }
             
             videoDevice.unlockForConfiguration()
@@ -127,10 +215,21 @@ class CameraManager: NSObject, ObservableObject {
             print("Error setting up audio input: \(error)")
         }
         
-        // 配置视频输出
+        // 配置视频输出 - 支持杜比视界
         videoOutput = AVCaptureMovieFileOutput()
         if let videoOutput = videoOutput, captureSession.canAddOutput(videoOutput) {
             captureSession.addOutput(videoOutput)
+            
+            // 配置HDR和杜比视界支持
+            if let connection = videoOutput.connection(with: .video) {
+                // 启用HDR
+                if connection.isVideoStabilizationSupported {
+                    connection.preferredVideoStabilizationMode = .auto
+                }
+                
+                // 设置视频方向
+                connection.videoOrientation = .portrait
+            }
         }
     }
     

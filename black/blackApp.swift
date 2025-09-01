@@ -13,6 +13,7 @@ struct blackApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .statusBarHidden(true) // 全局隐藏状态栏
         }
     }
 }

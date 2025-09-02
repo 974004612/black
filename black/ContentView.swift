@@ -209,12 +209,8 @@ class CameraManager: NSObject, ObservableObject {
                     connection.videoOrientation = .portrait
                 }
                 
-                // 尝试启用HDR（机型支持时有效）
-                if #available(iOS 17.0, *) {
-                    if connection.isVideoHDREnabled != nil {
-                        connection.isVideoHDREnabled = true
-                    }
-                }
+                // 注意：AVCaptureConnection 不提供 HDR 开关。
+                // 只需选择支持 HDR 的 activeFormat 即可（format.isVideoHDRSupported）。
             }
         }
     }

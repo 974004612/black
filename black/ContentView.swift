@@ -94,26 +94,17 @@ class CameraManager: NSObject, ObservableObject {
         
         guard let captureSession = captureSession else { return }
         
-        // 配置视频输入 - 优先使用主摄像头
+        // 配置视频输入 - 强制使用后置主摄 wideAngle
         var videoDevice: AVCaptureDevice?
-        
-        // 首先尝试获取主摄像头
-        if let mainCamera = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back) {
-            // 检查是否是主摄像头（焦距通常在24-28mm之间）
-            let formats = mainCamera.formats
-            for format in formats {
-                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                // 主摄像头通常有更大的传感器和更好的性能
-                if dimensions.width >= 3840 && dimensions.height >= 2160 {
-                    videoDevice = mainCamera
-                    break
-                }
-            }
-        }
-        
-        // 如果没找到合适的主摄像头，使用默认的后置摄像头
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .builtInTripleCamera],
+            mediaType: .video,
+            position: .back
+        )
+        // 先找物理主摄 wideAngle，其次退回 tripleCamera
+        videoDevice = discovery.devices.first(where: { $0.deviceType == .builtInWideAngleCamera })
         if videoDevice == nil {
-            videoDevice = AVCaptureDevice.default(for: .video)
+            videoDevice = discovery.devices.first
         }
         
         guard let videoDevice = videoDevice else { return }
@@ -142,7 +133,7 @@ class CameraManager: NSObject, ObservableObject {
                 
                 // 检查帧率范围
                 for frameRateRange in format.videoSupportedFrameRateRanges {
-                    if frameRateRange.maxFrameRate >= 120 && is4K {
+                    if frameRateRange.minFrameRate <= 120 && frameRateRange.maxFrameRate >= 120 && is4K {
                         // 优先选择支持HDR的格式
                         if selectedFormat == nil || (supportsHDR && !selectedFormat!.isVideoHDRSupported) {
                             selectedFormat = format
@@ -168,6 +159,7 @@ class CameraManager: NSObject, ObservableObject {
                 print("- 帧率: \(selectedFrameRate) FPS")
                 print("- HDR支持: \(format.isVideoHDRSupported ? "是" : "否")")
                 print("- 杜比视界支持: \(format.isVideoHDRSupported ? "是" : "否")")
+                print("- 设备: \(videoDevice.localizedName), 类型: \(videoDevice.deviceType.rawValue)")
             } else {
                 print("未找到支持4K 120帧率的格式，使用默认设置")
                 // 打印可用的格式信息
@@ -175,7 +167,8 @@ class CameraManager: NSObject, ObservableObject {
                 for (index, format) in formats.enumerated() {
                     let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
                     let maxFrameRate = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
-                    print("格式 \(index): \(dimensions.width)x\(dimensions.height), 最大帧率: \(maxFrameRate), HDR: \(format.isVideoHDRSupported)")
+                    let minFrameRate = format.videoSupportedFrameRateRanges.map { $0.minFrameRate }.min() ?? 0
+                    print("格式 \(index): \(dimensions.width)x\(dimensions.height), 帧率范围: \(minFrameRate)-\(maxFrameRate), HDR: \(format.isVideoHDRSupported)")
                 }
             }
             
@@ -204,9 +197,9 @@ class CameraManager: NSObject, ObservableObject {
             
             // 配置HDR和杜比视界支持
             if let connection = videoOutput.connection(with: .video) {
-                // 启用HDR
+                // 高帧率下关闭视频防抖，避免系统自动降低帧率
                 if connection.isVideoStabilizationSupported {
-                    connection.preferredVideoStabilizationMode = .auto
+                    connection.preferredVideoStabilizationMode = .off
                 }
                 
                 // 设置视频方向 - 使用现代API
@@ -214,6 +207,13 @@ class CameraManager: NSObject, ObservableObject {
                     connection.videoRotationAngle = 0 // 0度表示竖屏
                 } else {
                     connection.videoOrientation = .portrait
+                }
+                
+                // 尝试启用HDR（机型支持时有效）
+                if #available(iOS 17.0, *) {
+                    if connection.isVideoHDREnabled != nil {
+                        connection.isVideoHDREnabled = true
+                    }
                 }
             }
         }

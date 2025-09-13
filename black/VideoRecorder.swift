@@ -92,6 +92,10 @@ final class VideoRecorder: NSObject, ObservableObject {
                     if connection.isVideoStabilizationSupported {
                         connection.preferredVideoStabilizationMode = .off
                     }
+                    // Prefer HEVC for Dolby Vision compatibility
+                    if self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
+                        self.movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)
+                    }
                 }
                 // Prefer longer fragments to reduce overhead
                 self.movieOutput.movieFragmentInterval = CMTime(seconds: 2, preferredTimescale: 600)
@@ -168,6 +172,10 @@ final class VideoRecorder: NSObject, ObservableObject {
         }
         guard supportsHLG else {
             return "设备不支持 HLG HDR 颜色空间"
+        }
+        // Check HEVC codec availability for file output
+        if !self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
+            return "设备当前不支持 HEVC 编码"
         }
         return nil
     }

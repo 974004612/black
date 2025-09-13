@@ -238,19 +238,30 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         }
     }
 
-    func stopAndSave(reason: String? = nil) {
+    func stopAndSave(reason: String? = nil, completion: (() -> Void)? = nil) {
         sessionQueue.async {
+            let finishAndSave: () -> Void = {
+                if let url = self.currentOutputURL {
+                    self.saveToPhotoLibrary(videoURL: url) {
+                        completion?()
+                    }
+                } else {
+                    DispatchQueue.main.async { completion?() }
+                }
+            }
+
             guard self.isRecording else {
-                if let url = self.currentOutputURL { self.saveToPhotoLibrary(videoURL: url) }
+                finishAndSave()
                 return
             }
             self.isRecording = false
-            guard let writer = self.assetWriter else { return }
-            let group = DispatchGroup()
-            group.enter()
-            writer.finishWriting { group.leave() }
-            group.wait()
-            if let url = self.currentOutputURL { self.saveToPhotoLibrary(videoURL: url) }
+            if let writer = self.assetWriter {
+                writer.finishWriting {
+                    finishAndSave()
+                }
+            } else {
+                finishAndSave()
+            }
             self.teardownWriter()
         }
     }
@@ -388,7 +399,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         }
     }
 
-    private func saveToPhotoLibrary(videoURL: URL) {
+    private func saveToPhotoLibrary(videoURL: URL, completion: (() -> Void)? = nil) {
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             let save: () -> Void = {
                 PHPhotoLibrary.shared().performChanges({
@@ -397,9 +408,18 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                     if !success { print("[HDR] Save to Photos failed: \(error?.localizedDescription ?? "unknown")") } else { print("[HDR] Saved to Photos: \(videoURL.lastPathComponent)") }
                     try? FileManager.default.removeItem(at: videoURL)
                     self.endBackgroundTaskIfNeeded()
+                    DispatchQueue.main.async { completion?() }
                 }
             }
             if status == .authorized || status == .limited { save() } else { save() }
+        }
+    }
+
+    func requestPhotoAddPermissionIfNeeded(_ completion: @escaping (Bool) -> Void) {
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            DispatchQueue.main.async {
+                completion(status == .authorized || status == .limited)
+            }
         }
     }
 }

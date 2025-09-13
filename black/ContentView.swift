@@ -33,13 +33,15 @@ struct ContentView: View {
         .modifier(BlackStatusBarStyle())
         .preferredColorScheme(.dark)
         .onAppear {
-            if let error = recorder.checkRequiredCapabilities() {
-                capabilityMessage = error
-                showCapabilityAlert = true
-                UIApplication.shared.isIdleTimerDisabled = false
-            } else {
-                UIApplication.shared.isIdleTimerDisabled = true
-                recorder.startRecording()
+            recorder.requestPhotoAddPermissionIfNeeded { _ in
+                if let error = recorder.checkRequiredCapabilities() {
+                    capabilityMessage = error
+                    showCapabilityAlert = true
+                    UIApplication.shared.isIdleTimerDisabled = false
+                } else {
+                    UIApplication.shared.isIdleTimerDisabled = true
+                    recorder.startRecording()
+                }
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -47,8 +49,9 @@ struct ContentView: View {
             case .background, .inactive:
                 // Save when app goes to background/lock
                 if recorder.isRecording {
-                    recorder.stopAndSave(reason: "scenePhase \(newPhase)")
-                    shouldExitOnNextActive = true
+                    recorder.stopAndSave(reason: "scenePhase \(newPhase)") {
+                        shouldExitOnNextActive = true
+                    }
                 }
             case .active:
                 // Close app only if we previously backgrounded during recording

@@ -31,6 +31,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
     private var currentOutputURL: URL?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private(set) var usedEightBitFallback: Bool = false
+    private var pendingWriterSetup: Bool = false
 
     @Published private(set) var isRecording: Bool = false
 
@@ -228,7 +229,8 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                 guard !self.isRecording else { return }
                 let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mov")
                 self.currentOutputURL = outputURL
-                self.setupWriter(outputURL: outputURL)
+                // Defer writer setup until first video sample to use exact buffer size/orientation
+                self.pendingWriterSetup = true
                 self.startBackgroundTask()
                 self.isRecording = true
                 print("[HDR] startRecording -> URL: \(outputURL.path), eightBitFallback=\(self.usedEightBitFallback)")
@@ -253,52 +255,67 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         }
     }
 
-    private func setupWriter(outputURL: URL) {
+    private func setupWriter(outputURL: URL, width: Int, height: Int, orientation: AVCaptureVideoOrientation) {
         do {
             let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
 
-            // Video settings: Prefer HEVC Main10 + HLG; if 8-bit fallback is used, keep color tags but encoder may choose 8-bit
+            // Ensure square pixels and clean aperture
+            let compressionProps: [String: Any] = [
+                AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel as String,
+                AVVideoAllowFrameReorderingKey: false,
+                AVVideoExpectedSourceFrameRateKey: 120,
+                AVVideoAverageBitRateKey: 100_000_000,
+                AVVideoPixelAspectRatioKey: [
+                    AVVideoPixelAspectRatioHorizontalSpacingKey: 1,
+                    AVVideoPixelAspectRatioVerticalSpacingKey: 1
+                ],
+                AVVideoCleanApertureKey: [
+                    AVVideoCleanApertureWidthKey: width,
+                    AVVideoCleanApertureHeightKey: height,
+                    AVVideoCleanApertureHorizontalOffsetKey: 0,
+                    AVVideoCleanApertureVerticalOffsetKey: 0
+                ]
+            ]
+
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.hevc,
-                AVVideoWidthKey: 3840,
-                AVVideoHeightKey: 2160,
+                AVVideoWidthKey: width,
+                AVVideoHeightKey: height,
                 AVVideoColorPropertiesKey: [
                     AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
                     AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
                     AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020
                 ],
-                AVVideoCompressionPropertiesKey: [
-                    AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel as String,
-                    AVVideoAllowFrameReorderingKey: false,
-                    AVVideoExpectedSourceFrameRateKey: 120,
-                    AVVideoAverageBitRateKey: 100_000_000
-                ]
+                AVVideoCompressionPropertiesKey: compressionProps
             ]
+
             let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             videoInput.expectsMediaDataInRealTime = true
-            // Fix stretched/rotated frames by applying orientation transform based on the current connection
-            if let conn = self.videoOutput.connection(with: .video) {
-                switch conn.videoOrientation {
-                case .portrait:
-                    videoInput.transform = CGAffineTransform(rotationAngle: .pi / 2)
-                case .portraitUpsideDown:
-                    videoInput.transform = CGAffineTransform(rotationAngle: -.pi / 2)
-                case .landscapeRight:
-                    videoInput.transform = CGAffineTransform(rotationAngle: .pi)
-                default:
-                    videoInput.transform = .identity
-                }
+
+            // Only rotate when buffer orientation doesn't match encoded dimension
+            let isPortraitEncoded = height > width
+            switch orientation {
+            case .portrait:
+                videoInput.transform = isPortraitEncoded ? .identity : CGAffineTransform(rotationAngle: .pi / 2)
+            case .portraitUpsideDown:
+                videoInput.transform = isPortraitEncoded ? .identity : CGAffineTransform(rotationAngle: -.pi / 2)
+            case .landscapeRight:
+                videoInput.transform = isPortraitEncoded ? CGAffineTransform(rotationAngle: .pi / 2) : .identity
+            default:
+                videoInput.transform = .identity
             }
 
             let pixelAttrs: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: usedEightBitFallback ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height,
                 kCVPixelBufferIOSurfacePropertiesKey as String: [:]
             ]
             let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelAttrs)
 
             if writer.canAdd(videoInput) { writer.add(videoInput) }
 
-            // Add minimal camera metadata (may help Photos show camera info)
+            // Add minimal camera metadata
             var meta: [AVMetadataItem] = []
             if let device = self.videoDevice {
                 let camId = AVMutableMetadataItem()
@@ -393,6 +410,16 @@ extension HDRVideoRecorder: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         let isVideo = output is AVCaptureVideoDataOutput
 
         if assetWriter?.status == .unknown && isVideo {
+            // Setup writer using first frame's true dimensions
+            if pendingWriterSetup {
+                if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                    let w = CVPixelBufferGetWidth(pb)
+                    let h = CVPixelBufferGetHeight(pb)
+                    let orient = self.videoOutput.connection(with: .video)?.videoOrientation ?? .portrait
+                    if let url = self.currentOutputURL { self.setupWriter(outputURL: url, width: w, height: h, orientation: orient) }
+                    pendingWriterSetup = false
+                }
+            }
             // Start writing session at first video sample timestamp
             let startTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             assetWriter?.startWriting()

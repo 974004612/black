@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSCameraUsageDescription</key>
+    <string>需要使用相机以进行 4K 120 帧 HDR 视频录制</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>需要使用麦克风录制视频音频</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>需要写入相册以保存录制的视频</string>
+</dict>
+</plist>
+

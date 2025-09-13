@@ -7,55 +7,71 @@
 
 import SwiftUI
 import SwiftData
+import AVFoundation
+import UIKit
+
+struct BlackStatusBarStyle: ViewModifier {
+    @State private var hidden: Bool = true
+    func body(content: Content) -> some View {
+        content
+            .statusBarHidden(hidden)
+    }
+}
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @StateObject private var recorder = VideoRecorder()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showCapabilityAlert: Bool = false
+    @State private var capabilityMessage: String = ""
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        ZStack {
+            Color.black.ignoresSafeArea()
+            // Pure black screen; no controls
+        }
+        .modifier(BlackStatusBarStyle())
+        .preferredColorScheme(.dark)
+        .onAppear {
+            if let error = recorder.checkRequiredCapabilities() {
+                capabilityMessage = error
+                showCapabilityAlert = true
+                UIApplication.shared.isIdleTimerDisabled = false
+            } else {
+                UIApplication.shared.isIdleTimerDisabled = true
+                recorder.startRecording()
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            switch newPhase {
+            case .background, .inactive:
+                // Save when app goes to background/lock
+                recorder.stopAndSave(reason: "scenePhase \(newPhase)")
+            case .active:
+                // If user comes back after lock, close app automatically
+                if !recorder.isRecording {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+                        exit(0)
                     }
                 }
-                .onDelete(perform: deleteItems)
+            @unknown default:
+                break
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
         }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+        .alert("不支持的录制模式", isPresented: $showCapabilityAlert) {
+            Button("退出") {
+                UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
+                exit(0)
             }
+        } message: {
+            Text(capabilityMessage)
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
 }

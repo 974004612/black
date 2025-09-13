@@ -146,26 +146,19 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             let desc = format.formatDescription
             let dims = CMVideoFormatDescriptionGetDimensions(desc)
             let is4K = (dims.width == 3840 && dims.height == 2160) || (dims.width == 2160 && dims.height == 3840)
-            let is1080p = (dims.width == 1920 && dims.height == 1080) || (dims.width == 1080 && dims.height == 1920)
-            guard is4K || is1080p else { continue }
+            guard is4K else { continue }
 
             let supportsHDR = format.isVideoHDRSupported
             var maxSupportedFPS: Float64 = 0
             for range in format.videoSupportedFrameRateRanges { maxSupportedFPS = max(maxSupportedFPS, range.maxFrameRate) }
 
-            // Aim for 120fps if possible; otherwise 60; otherwise max
-            let target: Int32
-            if maxSupportedFPS >= 120 { target = 120 }
-            else if maxSupportedFPS >= 60 { target = 60 }
-            else { target = Int32(maxSupportedFPS.rounded(.down)) }
+            // Prefer 120 if possible, else 60, else the max available
+            let target: Int32 = maxSupportedFPS >= 120 ? 120 : (maxSupportedFPS >= 60 ? 60 : Int32(maxSupportedFPS.rounded(.down)))
 
-            // Scoring priorities: HDR first, then fps, then resolution preference that favors fps
+            // Prioritize HDR strongly, then fps
             var score = 0
             if supportsHDR { score += 10_000 }
             score += (target >= 120) ? 1_000 : (target >= 60 ? 600 : Int(target))
-            if target >= 120 { score += is4K ? 200 : 220 } // allow 1080p120 to outrank 4K60/30
-            else if target >= 60 { score += is4K ? 120 : 130 }
-            else { score += is4K ? 10 : 20 }
 
             if let current = best {
                 if score > current.score { best = (format, target, score) }
@@ -181,21 +174,19 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
             return "未找到可用的后置摄像头"
         }
-        // Check for 4K + 120fps + HDR format
-        var hasDesired = false
-        var supportsHLG = false
+        // Require at least one 4K HDR format; fps may vary (we'll prefer 120)
+        var has4KHDR = false
+        var bestMaxFPS: Float64 = 0
         for format in device.formats {
             let desc = format.formatDescription
             let dims = CMVideoFormatDescriptionGetDimensions(desc)
             let is4K = (dims.width == 3840 && dims.height == 2160) || (dims.width == 2160 && dims.height == 3840)
             guard is4K else { continue }
-            if format.isVideoHDRSupported { supportsHLG = true }
-            var maxFPS: Float64 = 0
-            for range in format.videoSupportedFrameRateRanges { maxFPS = max(maxFPS, range.maxFrameRate) }
-            if maxFPS >= 120 && format.isVideoHDRSupported { hasDesired = true; break }
+            guard format.isVideoHDRSupported else { continue }
+            has4KHDR = true
+            for range in format.videoSupportedFrameRateRanges { bestMaxFPS = max(bestMaxFPS, range.maxFrameRate) }
         }
-        guard hasDesired else { return "设备不支持 4K 120 帧 HDR 视频录制" }
-        guard supportsHLG else { return "设备不支持 HLG HDR 颜色空间" }
+        guard has4KHDR else { return "设备不支持 4K HDR 视频录制" }
         return nil
     }
 

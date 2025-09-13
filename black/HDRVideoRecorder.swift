@@ -105,6 +105,19 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
 
             self.session.commitConfiguration()
             self.session.startRunning()
+            self.logActiveConfiguration()
+        }
+    }
+
+    private func logActiveConfiguration() {
+        guard let device = self.videoDevice else { return }
+        let desc = device.activeFormat.formatDescription
+        let dims = CMVideoFormatDescriptionGetDimensions(desc)
+        var maxFPS: Float64 = 0
+        for range in device.activeFormat.videoSupportedFrameRateRanges { maxFPS = max(maxFPS, range.maxFrameRate) }
+        print("[HDR] Active format: \(dims.width)x\(dims.height), HDR=\(device.activeFormat.isVideoHDRSupported), maxFPS=\(Int(maxFPS))")
+        if let videoConn = self.videoOutput.connection(with: .video) {
+            print("[HDR] Connection supports video orientation = \(videoConn.isVideoOrientationSupported)")
         }
     }
 

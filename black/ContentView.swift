@@ -19,7 +19,7 @@ struct BlackStatusBarStyle: ViewModifier {
 }
 
 struct ContentView: View {
-    @StateObject private var recorder = VideoRecorder()
+    @StateObject private var recorder = HDRVideoRecorder()
     @Environment(\.scenePhase) private var scenePhase
     @State private var showCapabilityAlert: Bool = false
     @State private var capabilityMessage: String = ""

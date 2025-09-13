@@ -313,7 +313,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                     self.endBackgroundTaskIfNeeded()
                 }
             }
-            if status == .authorized || status == .limited || status == .addOnly { save() } else { save() }
+            if status == .authorized || status == .limited { save() } else { save() }
         }
     }
 }

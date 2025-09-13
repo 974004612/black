@@ -79,7 +79,7 @@ struct ContentView: View {
         do {
             try backCamera.lockForConfiguration()
             // 在setupCaptureSession中，确保HDR/Dolby Vision支持
-            if let format = backCamera.formats.first(where: { fmt in
+            if let format = backCamera.formats.first(where: { (fmt: AVCaptureDevice.Format) in
                 fmt.videoSupportedFrameRateRanges.contains(where: { $0.maxFrameRate >= 120 })
                 && fmt.isVideoHDRSupported  // 支持HDR，包括Dolby Vision如果可用
             }) {

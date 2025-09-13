@@ -89,10 +89,7 @@ final class VideoRecorder: NSObject, ObservableObject {
                     if connection.isVideoStabilizationSupported {
                         connection.preferredVideoStabilizationMode = .off
                     }
-                    // Enable HDR when supported (HLG/PQ chosen by system)
-                    if connection.isVideoHDRSupported {
-                        connection.isVideoHDREnabled = true
-                    }
+                    // HDR is negotiated by active format and codec; no explicit toggle here
                     // Prefer HEVC; if unavailable, fall back to H.264 automatically
                     if self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
                         self.movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)

@@ -18,6 +18,7 @@ final class VideoRecorder: NSObject, ObservableObject {
     private var videoInput: AVCaptureDeviceInput?
     private var audioInput: AVCaptureDeviceInput?
     private let movieOutput = AVCaptureMovieFileOutput()
+    private(set) var usedFallbackCodec: Bool = false
 
     private var currentOutputURL: URL?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -88,9 +89,16 @@ final class VideoRecorder: NSObject, ObservableObject {
                     if connection.isVideoStabilizationSupported {
                         connection.preferredVideoStabilizationMode = .off
                     }
-                    // Prefer HEVC for Dolby Vision compatibility
+                    // Prefer HEVC; if unavailable, fall back to H.264 automatically
                     if self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
                         self.movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)
+                        self.usedFallbackCodec = false
+                    } else if self.movieOutput.availableVideoCodecTypes.contains(.h264) {
+                        self.movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.h264], for: connection)
+                        self.usedFallbackCodec = true
+                    } else {
+                        // Leave default; system will choose
+                        self.usedFallbackCodec = true
                     }
                 }
                 // Prefer longer fragments to reduce overhead
@@ -168,10 +176,7 @@ final class VideoRecorder: NSObject, ObservableObject {
             return "设备不支持 4K 120 帧 HDR 视频录制"
         }
         guard supportsHLG else { return "设备不支持 HDR 视频录制" }
-        // Check HEVC codec availability for file output
-        if !self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
-            return "设备当前不支持 HEVC 编码"
-        }
+        // Do not hard-fail on lack of HEVC; we'll fall back to H.264 automatically
         return nil
     }
 

@@ -25,8 +25,8 @@ struct blackApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            HostingController(rootView: ContentView())
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(sharedModelContainer) // 如果不需要SwiftData，可以移除
     }
 }

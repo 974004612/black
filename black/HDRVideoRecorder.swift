@@ -243,6 +243,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         sessionQueue.async {
             if self.isSaving { DispatchQueue.main.async { completion?() }; return }
             self.isSaving = true
+            self.startBackgroundTask()
             let finishAndSave: () -> Void = {
                 if let url = self.currentOutputURL {
                     self.saveToPhotoLibrary(videoURL: url) {
@@ -261,13 +262,11 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             }
             self.isRecording = false
             if let writer = self.assetWriter {
-                writer.finishWriting {
-                    finishAndSave()
-                }
+                writer.finishWriting { finishAndSave() }
             } else {
                 finishAndSave()
             }
-            self.teardownWriter()
+            // Defer teardown until after saving completes to avoid releasing resources too early
         }
     }
 
@@ -413,7 +412,10 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                     if !success { print("[HDR] Save to Photos failed: \(error?.localizedDescription ?? "unknown")") } else { print("[HDR] Saved to Photos: \(videoURL.lastPathComponent)") }
                     try? FileManager.default.removeItem(at: videoURL)
                     self.endBackgroundTaskIfNeeded()
-                    DispatchQueue.main.async { completion?() }
+                    DispatchQueue.main.async {
+                        self.teardownWriter()
+                        completion?()
+                    }
                 }
             }
             if status == .authorized || status == .limited { save() } else { save() }

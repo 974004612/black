@@ -30,6 +30,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
     private var recordingStartTime: CMTime?
     private var currentOutputURL: URL?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private(set) var usedEightBitFallback: Bool = false
 
     @Published private(set) var isRecording: Bool = false
 
@@ -85,10 +86,24 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                 }
             }
 
-            // Video data output (10-bit YUV)
+            // Video data output: prefer 10-bit; fallback to 8-bit if unavailable
             if self.session.canAddOutput(self.videoOutput) {
-                let pixelFormat: OSType = kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
-                self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: pixelFormat]
+                let types = self.videoOutput.availableVideoPixelFormatTypes
+                var chosen: OSType = kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
+                if types.contains(kCVPixelFormatType_420YpCbCr10BiPlanarFullRange) {
+                    chosen = kCVPixelFormatType_420YpCbCr10BiPlanarFullRange
+                    self.usedEightBitFallback = false
+                } else if types.contains(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange) {
+                    chosen = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+                    self.usedEightBitFallback = false
+                } else if types.contains(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
+                    chosen = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+                    self.usedEightBitFallback = true
+                } else {
+                    // Last resort: let system decide (likely 8-bit)
+                    self.usedEightBitFallback = true
+                }
+                self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: chosen]
                 self.videoOutput.alwaysDiscardsLateVideoFrames = false
                 self.videoOutput.setSampleBufferDelegate(self, queue: self.videoOutputQueue)
                 self.session.addOutput(self.videoOutput)
@@ -168,12 +183,6 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         }
         guard hasDesired else { return "设备不支持 4K 120 帧 HDR 视频录制" }
         guard supportsHLG else { return "设备不支持 HLG HDR 颜色空间" }
-
-        // Check 10-bit pixel format support
-        let supportedPixelFormats = videoOutput.availableVideoPixelFormatTypes
-        guard supportedPixelFormats.contains(kCVPixelFormatType_420YpCbCr10BiPlanarFullRange) else {
-            return "不支持 10-bit 采样 (420f10)"
-        }
         return nil
     }
 
@@ -236,7 +245,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         do {
             let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
 
-            // Video settings: HEVC Main10, HLG BT.2020
+            // Video settings: Prefer HEVC Main10 + HLG; if 8-bit fallback is used, keep color tags but encoder may choose 8-bit
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.hevc,
                 AVVideoWidthKey: 3840,
@@ -257,7 +266,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             videoInput.expectsMediaDataInRealTime = true
 
             let pixelAttrs: [String: Any] = [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+                kCVPixelBufferPixelFormatTypeKey as String: usedEightBitFallback ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
                 kCVPixelBufferIOSurfacePropertiesKey as String: [:]
             ]
             let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelAttrs)

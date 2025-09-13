@@ -319,23 +319,11 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             videoInput.expectsMediaDataInRealTime = true
 
-            // Only rotate when buffer orientation doesn't match encoded dimension
-            let isPortraitEncoded = height > width
-            switch orientation {
-            case .portrait:
-                videoInput.transform = isPortraitEncoded ? .identity : CGAffineTransform(rotationAngle: .pi / 2)
-            case .portraitUpsideDown:
-                videoInput.transform = isPortraitEncoded ? .identity : CGAffineTransform(rotationAngle: -.pi / 2)
-            case .landscapeRight:
-                videoInput.transform = isPortraitEncoded ? CGAffineTransform(rotationAngle: .pi / 2) : .identity
-            default:
-                videoInput.transform = .identity
-            }
+            // Keep identity transform; rely on encoded width/height matching buffers to avoid stretch
+            videoInput.transform = .identity
 
             let pixelAttrs: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: usedEightBitFallback ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
-                kCVPixelBufferWidthKey as String: width,
-                kCVPixelBufferHeightKey as String: height,
                 kCVPixelBufferIOSurfacePropertiesKey as String: [:]
             ]
             let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelAttrs)
@@ -448,17 +436,18 @@ extension HDRVideoRecorder: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         guard isRecording else { return }
         let isVideo = output is AVCaptureVideoDataOutput
 
-        if assetWriter?.status == .unknown && isVideo {
-            // Setup writer using first frame's true dimensions
-            if pendingWriterSetup {
-                if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
-                    let w = CVPixelBufferGetWidth(pb)
-                    let h = CVPixelBufferGetHeight(pb)
-                    let orient = self.videoOutput.connection(with: .video)?.videoOrientation ?? .portrait
-                    if let url = self.currentOutputURL { self.setupWriter(outputURL: url, width: w, height: h, orientation: orient) }
-                    pendingWriterSetup = false
-                }
+        // Ensure writer is created from the first video sample BEFORE we test status
+        if isVideo && pendingWriterSetup {
+            if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                let w = CVPixelBufferGetWidth(pb)
+                let h = CVPixelBufferGetHeight(pb)
+                let orient = connection.videoOrientation
+                if let url = self.currentOutputURL { self.setupWriter(outputURL: url, width: w, height: h, orientation: orient) }
+                pendingWriterSetup = false
             }
+        }
+
+        if isVideo && assetWriter?.status == .unknown {
             // Start writing session at first video sample timestamp
             let startTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
             assetWriter?.startWriting()

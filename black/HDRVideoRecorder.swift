@@ -7,6 +7,7 @@
 
 import Foundation
 import AVFoundation
+import VideoToolbox
 import Photos
 import UIKit
 
@@ -57,11 +58,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                             device.activeVideoMinFrameDuration = duration
                             device.activeVideoMaxFrameDuration = duration
                         }
-                        if device.activeFormat.isVideoHDRSupported {
-                            if device.isActiveColorSpaceSupported(.HLG_BT2020) {
-                                device.activeColorSpace = .HLG_BT2020
-                            }
-                        }
+                        // HDR negotiated by format; explicit activeColorSpace APIs are not available on all SDKs
                         device.unlockForConfiguration()
                     }
 

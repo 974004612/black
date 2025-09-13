@@ -51,11 +51,7 @@ final class VideoRecorder: NSObject, ObservableObject {
                             device.activeVideoMinFrameDuration = duration
                             device.activeVideoMaxFrameDuration = duration
                         }
-                        if device.activeFormat.isVideoHDRSupported {
-                            if device.isActiveColorSpaceSupported(.HLG_BT2020) {
-                                device.activeColorSpace = .HLG_BT2020
-                            }
-                        }
+                        // HDR will be negotiated automatically by the active format and codec
                         device.unlockForConfiguration()
                     }
 
@@ -150,7 +146,7 @@ final class VideoRecorder: NSObject, ObservableObject {
             return "未找到可用的后置摄像头"
         }
 
-        let supportsHLG = device.isActiveColorSpaceSupported(.HLG_BT2020)
+        var supportsHLG = false
         var hasDesiredFormat = false
 
         for format in device.formats {
@@ -159,6 +155,7 @@ final class VideoRecorder: NSObject, ObservableObject {
             let is4K = (dims.width == 3840 && dims.height == 2160) || (dims.width == 2160 && dims.height == 3840)
             guard is4K else { continue }
             guard format.isVideoHDRSupported else { continue }
+            supportsHLG = true
 
             var maxFPS: Float64 = 0
             for range in format.videoSupportedFrameRateRanges {
@@ -170,9 +167,7 @@ final class VideoRecorder: NSObject, ObservableObject {
         guard hasDesiredFormat else {
             return "设备不支持 4K 120 帧 HDR 视频录制"
         }
-        guard supportsHLG else {
-            return "设备不支持 HLG HDR 颜色空间"
-        }
+        guard supportsHLG else { return "设备不支持 HDR 视频录制" }
         // Check HEVC codec availability for file output
         if !self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
             return "设备当前不支持 HEVC 编码"
@@ -291,7 +286,7 @@ extension VideoRecorder: AVCaptureFileOutputRecordingDelegate {
                 }
             }
 
-            if status == .authorized || status == .limited || status == .addOnly {
+            if status == .authorized || status == .limited {
                 saveBlock()
             } else {
                 // Try saving anyway (may fail), then end background task

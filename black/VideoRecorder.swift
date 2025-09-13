@@ -43,7 +43,7 @@ final class VideoRecorder: NSObject, ObservableObject {
             if let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) {
                 self.videoDevice = device
                 do {
-                    // Find best format: 4K + >=120fps + HDR if available
+                    // Find best format: 4K + prefer 60fps + HDR if available
                     if let bestFormat = self.selectBestFormat(for: device) {
                         try device.lockForConfiguration()
                         device.activeFormat = bestFormat.format
@@ -89,6 +89,10 @@ final class VideoRecorder: NSObject, ObservableObject {
                     if connection.isVideoStabilizationSupported {
                         connection.preferredVideoStabilizationMode = .off
                     }
+                    // Enable HDR when supported (HLG/PQ chosen by system)
+                    if connection.isVideoHDRSupported {
+                        connection.isVideoHDREnabled = true
+                    }
                     // Prefer HEVC; if unavailable, fall back to H.264 automatically
                     if self.movieOutput.availableVideoCodecTypes.contains(.hevc) {
                         self.movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)
@@ -128,8 +132,8 @@ final class VideoRecorder: NSObject, ObservableObject {
                 maxSupportedFPS = max(maxSupportedFPS, range.maxFrameRate)
             }
 
-            // Prefer >=120fps; if not, take the highest
-            let targetFPS: Int32? = maxSupportedFPS >= 120 ? 120 : Int32(maxSupportedFPS.rounded(.down))
+            // Prefer 60fps; if supported higher, cap at 60 for DV compatibility
+            let targetFPS: Int32? = maxSupportedFPS >= 60 ? 60 : Int32(maxSupportedFPS.rounded(.down))
 
             // Scoring: prioritize HDR and 120fps
             var score = 0

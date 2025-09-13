@@ -260,9 +260,21 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                 finishAndSave()
                 return
             }
+            // Stop delivering new samples
             self.isRecording = false
+            self.videoOutput.setSampleBufferDelegate(nil, queue: nil)
+            self.audioOutput.setSampleBufferDelegate(nil, queue: nil)
+            self.session.stopRunning()
+
+            // Close writer inputs before finishing
+            self.videoWriterInput?.markAsFinished()
+            self.audioWriterInput?.markAsFinished()
+
             if let writer = self.assetWriter {
-                writer.finishWriting { finishAndSave() }
+                writer.finishWriting {
+                    print("[HDR] finishWriting status=\(writer.status.rawValue) error=\(String(describing: writer.error))")
+                    finishAndSave()
+                }
             } else {
                 finishAndSave()
             }

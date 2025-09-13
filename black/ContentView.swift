@@ -23,6 +23,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showCapabilityAlert: Bool = false
     @State private var capabilityMessage: String = ""
+    @State private var shouldExitOnNextActive: Bool = false
 
     var body: some View {
         ZStack {
@@ -45,11 +46,16 @@ struct ContentView: View {
             switch newPhase {
             case .background, .inactive:
                 // Save when app goes to background/lock
-                recorder.stopAndSave(reason: "scenePhase \(newPhase)")
+                if recorder.isRecording {
+                    recorder.stopAndSave(reason: "scenePhase \(newPhase)")
+                    shouldExitOnNextActive = true
+                }
             case .active:
-                // If user comes back after lock, close app automatically
-                if !recorder.isRecording {
+                // Close app only if we previously backgrounded during recording
+                if shouldExitOnNextActive {
+                    shouldExitOnNextActive = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        print("Exiting after background save")
                         UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
                         exit(0)
                     }

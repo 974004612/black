@@ -220,6 +220,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                 self.setupWriter(outputURL: outputURL)
                 self.startBackgroundTask()
                 self.isRecording = true
+                print("[HDR] startRecording -> URL: \(outputURL.path), eightBitFallback=\(self.usedEightBitFallback)")
             }
         }
     }
@@ -330,7 +331,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                 PHPhotoLibrary.shared().performChanges({
                     PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
                 }) { success, error in
-                    if !success { print("Save to Photos failed: \(error?.localizedDescription ?? "unknown")") }
+                    if !success { print("[HDR] Save to Photos failed: \(error?.localizedDescription ?? "unknown")") } else { print("[HDR] Saved to Photos: \(videoURL.lastPathComponent)") }
                     try? FileManager.default.removeItem(at: videoURL)
                     self.endBackgroundTaskIfNeeded()
                 }
@@ -354,7 +355,7 @@ extension HDRVideoRecorder: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         }
 
         if assetWriter?.status == .failed {
-            print("Writer failed: \(assetWriter?.error?.localizedDescription ?? "unknown")")
+            print("[HDR] Writer failed: \(assetWriter?.error?.localizedDescription ?? "unknown")")
             return
         }
 
@@ -366,12 +367,18 @@ extension HDRVideoRecorder: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
                 }
                 // Append pixel buffer with timing
                 let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                pixelBufferAdaptor?.append(pb, withPresentationTime: time)
+                if !(pixelBufferAdaptor?.append(pb, withPresentationTime: time) ?? false) {
+                    print("[HDR] Adaptor append failed at time: \(CMTimeGetSeconds(time))s")
+                }
             } else {
-                input.append(sampleBuffer)
+                if !input.append(sampleBuffer) {
+                    print("[HDR] Video input append(sampleBuffer) returned false")
+                }
             }
         } else if !isVideo, let input = audioWriterInput, input.isReadyForMoreMediaData {
-            input.append(sampleBuffer)
+            if !input.append(sampleBuffer) {
+                print("[HDR] Audio input append(sampleBuffer) returned false")
+            }
         }
     }
 }

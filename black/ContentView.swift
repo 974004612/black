@@ -10,6 +10,7 @@ import SwiftData
 import AVFoundation
 import Photos
 import UIKit
+import CoreMedia  // 添加导入以支持CMTime
 
 // 自定义HostingController来隐藏状态栏
 class HostingController<Content: View>: UIHostingController<Content> {
@@ -77,13 +78,14 @@ struct ContentView: View {
         // 配置设备为120 FPS, HDR
         do {
             try backCamera.lockForConfiguration()
+            // 在setupCaptureSession中，确保HDR/Dolby Vision支持
             if let format = backCamera.formats.first(where: { fmt in
                 fmt.videoSupportedFrameRateRanges.contains(where: { $0.maxFrameRate >= 120 })
-                && fmt.isVideoHDRSupported
+                && fmt.isVideoHDRSupported  // 支持HDR，包括Dolby Vision如果可用
             }) {
                 backCamera.activeFormat = format
-                backCamera.activeVideoMinFrameDuration = CMTimeMake(value: 1, timescale: 120)
-                backCamera.activeVideoMaxFrameDuration = CMTimeMake(value: 1, timescale: 120)
+                backCamera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 120)  // 使用CMTime初始化
+                backCamera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 120)
             }
             backCamera.unlockForConfiguration()
         } catch {

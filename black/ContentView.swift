@@ -84,7 +84,7 @@ struct ContentView: View {
                 && fmt.isVideoHDRSupported  // 支持HDR，包括Dolby Vision如果可用
             }) {
                 backCamera.activeFormat = format
-                backCamera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 120)  // 使用CMTime初始化
+                backCamera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 120)
                 backCamera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 120)
             }
             backCamera.unlockForConfiguration()

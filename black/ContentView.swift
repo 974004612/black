@@ -52,6 +52,9 @@ struct ContentView: View {
                     recorder.stopAndSave(reason: "scenePhase \(newPhase)") {
                         shouldExitOnNextActive = true
                     }
+                } else {
+                    // If user kills app or exits before recording starts, no save
+                    shouldExitOnNextActive = true
                 }
             case .active:
                 // Close app only if we previously backgrounded during recording

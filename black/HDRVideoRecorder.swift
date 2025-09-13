@@ -32,6 +32,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
     private(set) var usedEightBitFallback: Bool = false
     private var pendingWriterSetup: Bool = false
+    private var isSaving: Bool = false
 
     @Published private(set) var isRecording: Bool = false
 
@@ -240,12 +241,16 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
 
     func stopAndSave(reason: String? = nil, completion: (() -> Void)? = nil) {
         sessionQueue.async {
+            if self.isSaving { DispatchQueue.main.async { completion?() }; return }
+            self.isSaving = true
             let finishAndSave: () -> Void = {
                 if let url = self.currentOutputURL {
                     self.saveToPhotoLibrary(videoURL: url) {
+                        self.isSaving = false
                         completion?()
                     }
                 } else {
+                    self.isSaving = false
                     DispatchQueue.main.async { completion?() }
                 }
             }

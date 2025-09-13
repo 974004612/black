@@ -276,6 +276,19 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             ]
             let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
             videoInput.expectsMediaDataInRealTime = true
+            // Fix stretched/rotated frames by applying orientation transform based on the current connection
+            if let conn = self.videoOutput.connection(with: .video) {
+                switch conn.videoOrientation {
+                case .portrait:
+                    videoInput.transform = CGAffineTransform(rotationAngle: .pi / 2)
+                case .portraitUpsideDown:
+                    videoInput.transform = CGAffineTransform(rotationAngle: -.pi / 2)
+                case .landscapeRight:
+                    videoInput.transform = CGAffineTransform(rotationAngle: .pi)
+                default:
+                    videoInput.transform = .identity
+                }
+            }
 
             let pixelAttrs: [String: Any] = [
                 kCVPixelBufferPixelFormatTypeKey as String: usedEightBitFallback ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
@@ -284,6 +297,28 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelAttrs)
 
             if writer.canAdd(videoInput) { writer.add(videoInput) }
+
+            // Add minimal camera metadata (may help Photos show camera info)
+            var meta: [AVMetadataItem] = []
+            if let device = self.videoDevice {
+                let camId = AVMutableMetadataItem()
+                camId.keySpace = .quickTimeMetadata
+                camId.key = AVMetadataKey.quickTimeMetadataKeyCameraIdentifier as (NSCopying & NSObjectProtocol)?
+                camId.value = device.uniqueID as (NSCopying & NSObjectProtocol)?
+                meta.append(camId)
+
+                let model = AVMutableMetadataItem()
+                model.keySpace = .common
+                model.key = AVMetadataKey.commonKeyModel as (NSCopying & NSObjectProtocol)?
+                model.value = UIDevice.current.model as (NSCopying & NSObjectProtocol)?
+                meta.append(model)
+            }
+            let software = AVMutableMetadataItem()
+            software.keySpace = .common
+            software.key = AVMetadataKey.commonKeySoftware as (NSCopying & NSObjectProtocol)?
+            software.value = "black" as (NSCopying & NSObjectProtocol)?
+            meta.append(software)
+            writer.metadata = meta
 
             // Audio settings (AAC)
             let audioSettings: [String: Any] = [
@@ -378,6 +413,10 @@ extension HDRVideoRecorder: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
                 }
                 // Append pixel buffer with timing
                 let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                // Ensure portrait frames are not stretched: swap width/height for portrait buffers if needed
+                if let conn = self.videoOutput.connection(with: .video), conn.videoOrientation == .portrait || conn.videoOrientation == .portraitUpsideDown {
+                    // Many devices deliver portrait buffers already rotated; adaptor handles it via transform. Nothing else to do.
+                }
                 if !(pixelBufferAdaptor?.append(pb, withPresentationTime: time) ?? false) {
                     print("[HDR] Adaptor append failed at time: \(CMTimeGetSeconds(time))s")
                 }

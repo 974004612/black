@@ -43,7 +43,9 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
         sessionQueue.async {
             self.session.beginConfiguration()
 
-            if self.session.canSetSessionPreset(.hd4K3840x2160) {
+            if self.session.canSetSessionPreset(.inputPriority) {
+                self.session.sessionPreset = .inputPriority
+            } else if self.session.canSetSessionPreset(.hd4K3840x2160) {
                 self.session.sessionPreset = .hd4K3840x2160
             }
 
@@ -104,7 +106,7 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
                     self.usedEightBitFallback = true
                 }
                 self.videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: chosen]
-                self.videoOutput.alwaysDiscardsLateVideoFrames = false
+                self.videoOutput.alwaysDiscardsLateVideoFrames = true
                 self.videoOutput.setSampleBufferDelegate(self, queue: self.videoOutputQueue)
                 self.session.addOutput(self.videoOutput)
                 if let connection = self.videoOutput.connection(with: .video) {
@@ -142,22 +144,31 @@ final class HDRVideoRecorder: NSObject, ObservableObject {
             let desc = format.formatDescription
             let dims = CMVideoFormatDescriptionGetDimensions(desc)
             let is4K = (dims.width == 3840 && dims.height == 2160) || (dims.width == 2160 && dims.height == 3840)
-            guard is4K else { continue }
+            let is1080p = (dims.width == 1920 && dims.height == 1080) || (dims.width == 1080 && dims.height == 1920)
+            guard is4K || is1080p else { continue }
 
             let supportsHDR = format.isVideoHDRSupported
             var maxSupportedFPS: Float64 = 0
-            for range in format.videoSupportedFrameRateRanges {
-                maxSupportedFPS = max(maxSupportedFPS, range.maxFrameRate)
-            }
-            let targetFPS: Int32? = maxSupportedFPS >= 120 ? 120 : Int32(maxSupportedFPS.rounded(.down))
+            for range in format.videoSupportedFrameRateRanges { maxSupportedFPS = max(maxSupportedFPS, range.maxFrameRate) }
 
+            // Aim for 120fps if possible; otherwise 60; otherwise max
+            let target: Int32
+            if maxSupportedFPS >= 120 { target = 120 }
+            else if maxSupportedFPS >= 60 { target = 60 }
+            else { target = Int32(maxSupportedFPS.rounded(.down)) }
+
+            // Scoring priorities: HDR first, then fps, then resolution preference that favors fps
             var score = 0
-            if supportsHDR { score += 1000 }
-            if let fps = targetFPS { score += Int(fps) }
+            if supportsHDR { score += 10_000 }
+            score += (target >= 120) ? 1_000 : (target >= 60 ? 600 : Int(target))
+            if target >= 120 { score += is4K ? 200 : 220 } // allow 1080p120 to outrank 4K60/30
+            else if target >= 60 { score += is4K ? 120 : 130 }
+            else { score += is4K ? 10 : 20 }
+
             if let current = best {
-                if score > current.score { best = (format, targetFPS, score) }
+                if score > current.score { best = (format, target, score) }
             } else {
-                best = (format, targetFPS, score)
+                best = (format, target, score)
             }
         }
         if let best { return (best.format, best.targetFrameRate) }
